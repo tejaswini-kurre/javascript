@@ -1,0 +1,330 @@
+Polyfill for promise:
+For asynchronous operation:
+let myPromise = new PromisePolyfill((resolve, reject) => {
+    setTimeout(() => {
+        resolve(100);
+    }, 1000);
+    
+});
+
+myPromise.then((val) => console.log(val)).catch((err) => console.log(err));
+
+//promise polyfill
+function PromisePolyfill(executor) {
+    let onResolve;
+    let onReject;
+    let isCalled = false;
+    
+    function resolve(val) {
+        if(typeof onResolve === 'function' && !isCalled) {
+            onResolve(val);
+            isCalled = true;
+        }
+    }
+    
+    function reject(val) {
+        if(typeof onResolve === 'function' && !isCalled) {
+            onReject(val);
+            isCalled = true;
+        }
+    }
+    
+    this.then = function(resolveHandler) {
+        onResolve = resolveHandler;
+        return this;
+    }
+    
+    this.catch = function(rejectHandler) {
+        onReject = rejectHandler;
+        return this;
+    }
+    
+    executor(resolve, reject);
+}
+For synchronous code:
+let myPromise = new PromisePolyfill((resolve, reject) => {
+    // setTimeout(() => {
+        reject(1000);
+    // }, 1000);
+    
+});
+
+myPromise.then((val) => console.log(val)).catch((err) => console.log(err));
+
+//promise polyfill
+function PromisePolyfill(executor) {
+    let onResolve;
+    let onReject;
+    let isCalled = false;
+    let isFulfilled = false;
+    let isRejected = false;
+    let value;
+    let error;
+    
+    
+    function resolve(val) {
+        isFulfilled = true;
+        value = val;
+        if(typeof onResolve === 'function' && !isCalled) {
+            onResolve(val);
+            isCalled = true;
+        }
+    }
+    
+    function reject(val) {
+        isRejected = true;
+        error = val;
+        if(typeof onResolve === 'function' && !isCalled) {
+            onReject(val);
+            isCalled = true;
+        }
+    }
+    
+    this.then = function(resolveHandler) {
+        onResolve = resolveHandler;
+        if(!isCalled && isFulfilled) {
+            onResolve(value);
+            isCalled = true;
+        }
+        return this;
+    }
+    
+    this.catch = function(rejectHandler) {
+        onReject = rejectHandler;
+        if(!isCalled && isRejected) {
+            onReject(error);
+            isCalled = true;
+        }
+        return this;
+    }
+    
+    executor(resolve, reject);
+}
+
+
+Implementation of cancellable promise
+Approach #1
+function wait(ms) {
+  const ret = {};
+  const signal = new Promise((resolve, reject) => {
+    ret.cancel = () => {
+      reject("Promise was cancelled");
+    };
+  });
+
+  ret.promise = new Promise((res, rej) => {
+    const timeOut = setTimeout(() => {
+      console.log("I was called");
+      res("ok");
+    }, ms);
+
+    signal.catch(err => {
+      rej(err);
+      clearTimeout(timeOut);
+    });
+  });
+
+  return ret;
+}
+
+const { promise, cancel } = wait(1000);
+promise.then(res => console.log(res)).catch(err => console.log(err));
+
+cancel();
+
+refactoring code
+function wait(signal, ms) {
+  return new Promise((res, rej) => {
+    const timeOut = setTimeout(() => {
+      console.log("I was called");
+      res("ok");
+    }, ms);
+
+    signal.catch(err => {
+      rej(err);
+      clearTimeout(timeOut);
+    });
+  });
+}
+
+function createCancellableSignal() {
+  const ret = {};
+  ret.signal = new Promise((resolve, reject) => {
+    ret.cancel = () => {
+      reject(new Error("Promise was cancelled"));
+    };
+  });
+
+  return ret;
+}
+
+const { signal, cancel } = createCancellableSignal();
+
+const promise = wait(signal, 1000);
+promise.then(res => console.log(res)).catch(err => console.log(err));
+
+cancel();
+Approach #2
+function wait(signal, ms) {
+  return new Promise((res, rej) => {
+    const timeOut = setTimeout(() => {
+      console.log("I was called");
+      res("ok");
+    }, ms);
+
+    signal.catch(err => {
+      rej(err);
+      clearTimeout(timeOut);
+    });
+  });
+}
+
+function createTimedSignal(ms) {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      reject(new Error(`Time out after ${ms}ms`));
+    }, ms);
+  });
+}
+
+const signal = createTimedSignal(500);
+
+const promise = wait(signal, 1000);
+promise.then(res => console.log(res)).catch(err => console.log(err));
+
+Polyfill for map()
+Array.prototype.myMap = function(cb) {
+    let res = [];
+    for(let i = 0; i<this.length ; i++) {
+        res.push(cb(this[i], i, this));
+    }
+    return res;
+}
+
+let arr = [1,2,3];
+// let arr1 = arr.map(x => x*2);
+let arr1 = arr.myMap(x => x*2);
+console.log(arr1);
+Polyfill for filter()
+Array.prototype.myFilter = function(cb) {
+    let res = [];
+    for(let i = 0; i<this.length ; i++) {
+        if(cb(this[i], i, this)) {
+            res.push(this[i]);
+        }
+    }
+    return res;
+}
+
+let arr = [1,2,3, 7, 8];
+// let arr1 = arr.filter(x => x%2 === 0);
+let arr1 = arr.myFilter(x => x%2 === 0);
+console.log(arr1);
+polyfill for reduce()
+Array.prototype.myReduce = function(cb, initialValue) {
+    let acc = initialValue;
+    for(let i = 0; i<this.length ; i++) {
+        acc = acc ? cb(acc, this[i], i, this) : this[i];
+    }
+    return acc;
+}
+
+let arr = [1,2,3, 7, 8];
+// let arr1 = arr.reduce((acc, val,i,ar) => acc+val, 0);
+let arr1 = arr.myReduce((acc, val,i,ar) => acc+val, 0);
+console.log(arr1);
+
+Polyfill for call()
+Function.prototype.myCall = function(context = {}, ...args) {
+    if(typeof this !== 'function') {
+        throw new Error("It is not callable");
+    }
+    context.fn = this;
+    context.fn(...args);
+}
+
+let employee = {
+    name: "Tejaswini",
+    type: "Developer"
+}
+
+function Employee() {
+    console.log(`I am ${this.name}, I am a ${this.type}`);
+}
+
+Employee.myCall(employee);
+Polyfill for apply()
+Function.prototype.myApply = function(context = {}, args) {
+    if(typeof this !== 'function') {
+        throw new Error("It is not callable");
+    }
+    if(!Array.isArray(args)) {
+        throw new Error("arguments are not in array");
+    }
+    context.fn = this;
+    context.fn(...args);
+}
+
+let employee = {
+    name: "Tejaswini",
+    type: "Developer"
+}
+
+function Employee(age) {
+    console.log(`I am ${this.name}, I am a ${this.type}, I'm ${age} years old`);
+}
+
+Employee.myApply(employee, [24]);
+Polyfill for bind()
+Function.prototype.myApply = function(context = {}, ...args) {
+    if(typeof this !== 'function') {
+        throw new Error("It is not callable");
+    }
+    if(!Array.isArray(args)) {
+        throw new Error("arguments are not in array");
+    }
+    context.fn = this;
+    return function(...newArgs) {
+        return context.fn(...args, ...newArgs);
+    }
+}
+
+let employee = {
+    name: "Tejaswini",
+    type: "Developer"
+}
+
+function Employee(age) {
+    console.log(`I am ${this.name}, I am a ${this.type}, I'm ${age} years old`);
+}
+
+const empFunc = Employee.bind(employee, 24);
+empFunc();
+
+Prototypal Inheritance
+function Shape(color) {
+    this.color = color;
+}
+Shape.prototype.getColor = function() {
+    console.log(this.color);
+}
+
+function Circle(color, radius) {
+    Shape.call(this, color);
+    this.radius = radius;
+}
+Circle.prototype = Object.create(Shape.prototype);
+Circle.prototype.getArea = function() {
+    console.log(this.radius * this.radius);
+}
+
+
+Circle.prototype.constructor = Circle;
+
+const shapeObj = new Shape("red");
+const circleObj = new Circle("blue", 5);
+shapeObj.getColor();
+circleObj.getColor();
+circleObj.getArea();
+
+
